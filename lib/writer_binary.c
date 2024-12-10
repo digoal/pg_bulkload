@@ -428,7 +428,7 @@ open_output_file(char *fname, char *filetype, bool check)
 
 #if PG_VERSION_NUM >= 110000
 	fd = BasicOpenFilePerm(fname, O_WRONLY | O_CREAT | O_EXCL | PG_BINARY,
-					   S_IRUSR | S_IWUSR);
+					   S_IRUSR | S_IWUSR, false);
 #else
 	fd = BasicOpenFile(fname, O_WRONLY | O_CREAT | O_EXCL | PG_BINARY,
 					   S_IRUSR | S_IWUSR);
