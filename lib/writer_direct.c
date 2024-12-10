@@ -220,7 +220,7 @@ DirectWriterInit(DirectWriter *self)
 	BULKLOAD_LSF_PATH(self->lsf_path, ls);
 #if PG_VERSION_NUM >= 110000
 	self->lsf_fd = BasicOpenFilePerm(self->lsf_path,
-		O_CREAT | O_EXCL | O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
+		O_CREAT | O_EXCL | O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR, false);
 #else
 	self->lsf_fd = BasicOpenFile(self->lsf_path,
 		O_CREAT | O_EXCL | O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
@@ -664,6 +664,9 @@ open_data_file(
 	int			ret;
 	BlockNumber segno;
 	char	   *fname = NULL;
+	// 新增2个变量
+	int len;
+	char *pg_fname = NULL;
 
 #if PG_VERSION_NUM >= 90100
 #if PG_VERSION_NUM >= 160000
@@ -678,6 +681,14 @@ open_data_file(
 #else
 	fname = relpath(rnode, MAIN_FORKNUM);
 #endif
+
+    // 新增以下5行代码, 删除fname的前11个字符串: file-dio:// 
+	len = strlen(fname);
+	pg_fname = (char *)palloc(len - 11 + 1);
+	strcpy(pg_fname, fname + 11);
+	ereport(LOG,
+           (errmsg("fname: %s, pg_fname: %s \n", fname, pg_fname)));
+
 	segno = blknum / RELSEG_SIZE;
 	if (segno > 0)
 	{
@@ -689,11 +700,17 @@ open_data_file(
 		sprintf(tmp, "%s.%u", fname, segno);
 		pfree(fname);
 		fname = tmp;
+                
+		// 新增以下4行代码, 删除fname的前11个字符串: file-dio:// 
+		pfree(pg_fname);
+		len = strlen(fname);
+		pg_fname = (char *)palloc(len - 11 + 1);
+		strcpy(pg_fname, fname + 11);
 	}
 #if PG_VERSION_NUM >= 110000
-	fd = BasicOpenFilePerm(fname, O_CREAT | O_WRONLY | PG_BINARY, S_IRUSR | S_IWUSR);
+	fd = BasicOpenFilePerm(pg_fname, O_CREAT | O_WRONLY | PG_BINARY, S_IRUSR | S_IWUSR, false);
 #else
-	fd = BasicOpenFile(fname, O_CREAT | O_WRONLY | PG_BINARY, S_IRUSR | S_IWUSR);
+	fd = BasicOpenFile(pg_fname, O_CREAT | O_WRONLY | PG_BINARY, S_IRUSR | S_IWUSR);
 #endif
 	if (fd == -1)
 		ereport(ERROR, (errcode_for_file_access(),
@@ -708,6 +725,9 @@ open_data_file(
 	}
 
 	pfree(fname);
+
+	// 新增以下1行代码, 释放pg_fname内存空间 
+	pfree(pg_fname); 
 
 	return fd;
 }
